@@ -1,5 +1,3 @@
-package com.almatime.utils
-
 /**
  * Provides an effective mechanism for handling logs.
  *
