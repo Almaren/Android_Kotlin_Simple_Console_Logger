@@ -9,27 +9,38 @@ object Log {
 
     const val TAG = "ads"   // TODO change default tag for logging
     var DEBUG = true        // TODO disable in release
+    private val lockHeader = ReentrantLock(true)
 
     fun getHeader(): String {
-        val currentClassName = Log.javaClass.name
-        val traces = Thread.currentThread().stackTrace
-        var found = false
+        if (!lockHeader.tryLock(50, TimeUnit.MILLISECONDS)) {
+            return "[]: "
+        }
 
-        for (trace in traces) {
-            try {
-                if (found) {
-                    if (!trace.className.startsWith(currentClassName)) {
-                        val targetClassName = Class.forName(trace.className)
-                        return "[${getClassName(targetClassName)}.${trace.methodName}.${trace.lineNumber}]: "
+        try {
+            val currentClassName = Log.javaClass.name
+            val traces = Thread.currentThread().stackTrace
+            var found = false
+
+            for (trace in traces) {
+                try {
+                    if (found) {
+                        if (!trace.className.startsWith(currentClassName)) {
+                            val targetClassName = Class.forName(trace.className)
+                            return "[${getClassName(targetClassName)}.${trace.methodName}.${trace.lineNumber}]: "
+                        }
                     }
+                    else if (trace.className.startsWith(currentClassName)) {
+                        found = true
+                        continue
+                    }
+                } catch (e: ClassNotFoundException) {
+                } catch (e2: IncompatibleClassChangeError) {
                 }
-                else if (trace.className.startsWith(currentClassName)) {
-                    found = true
-                    continue
-                }
-            } catch (e: ClassNotFoundException) {
-            } catch (e2: IncompatibleClassChangeError) {
             }
+        } catch (eThread: InterruptedException) {
+            e(eThread)
+        } finally {
+            lockHeader.unlock()
         }
         return "[]: "
     }
@@ -62,10 +73,14 @@ object Log {
         if (DEBUG) android.util.Log.w(tag, getHeader() + msg())
     }
 
-    inline fun e(tag: String = TAG, cause: Throwable, noinline msg: (() -> String)?) {
+    inline fun e(tag: String = TAG, cause: Throwable, noinline msg: (() -> String)? = null) {
         if (DEBUG) {
             android.util.Log.e(tag, msg?.let { it.invoke() } ?: "", cause)
         }
+    }
+
+    inline fun e(cause: Throwable) {
+        if (DEBUG) android.util.Log.e(TAG, "", cause)
     }
 
 }
